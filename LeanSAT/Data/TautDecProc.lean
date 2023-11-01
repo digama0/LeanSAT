@@ -5,8 +5,52 @@ Authors: Wojciech Nawrocki
 -/
 
 import Std
+import LeanSAT.Data.ICnf
+
+open Std
 
 /-! Tautology decision procedure -/
+
+namespace IClause
+def vars (C : IClause) : HashSet Var :=
+  C.foldr (init := .empty Var) fun l acc => acc.insert l.var
+
+theorem mem_vars (C : IClause) (x : Var) : x ∈ C.vars.toFinset ↔ ∃ l ∈ C.data, x = l.var := by
+  rw [vars, Array.foldr_eq_foldr_data]
+  induction C.data <;> aesop
+
+@[simp]
+theorem vars_toPropForm (C : IClause) : C.toPropForm.vars = C.vars.toFinset := by
+  ext x
+  simp [mem_vars, toPropForm]
+  induction C.data <;> simp_all [PropForm.vars]
+
+theorem semVars_sub (C : IClause) : C.toPropFun.semVars ⊆ C.vars.toFinset := by
+  rw [← vars_toPropForm, ← mk_toPropForm]
+  apply PropForm.semVars_subset_vars
+end IClause
+
+namespace ICnf
+
+def vars (φ : ICnf) : HashSet Var :=
+  φ.foldr (init := .empty Var) fun C acc => acc.union C.vars
+
+theorem mem_vars (φ : ICnf) (x : Var) : x ∈ φ.vars.toFinset ↔ ∃ C ∈ φ.data, x ∈ C.vars.toFinset :=
+by
+  simp only [vars, Array.foldr_eq_foldr_data]
+  induction φ.data <;> aesop
+
+@[simp]
+theorem vars_toPropForm (φ : ICnf) : φ.toPropForm.vars = φ.vars.toFinset := by
+  ext x
+  simp only [mem_vars, toPropForm]
+  induction φ.data <;> simp_all [PropForm.vars]
+
+theorem semVars_sub (φ : ICnf) : φ.toPropFun.semVars ⊆ φ.vars.toFinset := by
+  rw [← vars_toPropForm, ← mk_toPropForm]
+  apply PropForm.semVars_subset_vars
+
+end ICnf
 
 /-- `encodes enc C` says that the hashmap `enc` encodes the (non-tautological) clause `C`.
 More generally, `encodes enc C i` says that `enc` encodes the disjunction of all but the
