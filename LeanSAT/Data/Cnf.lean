@@ -21,6 +21,7 @@ class LitVar (L : Type u) (ν : outParam $ Type v) where
   mkPos : ν → L
   mkNeg : ν → L := fun x => negate (mkPos x)
   toVar : L → ν
+  /-- true if positive -/
   polarity : L → Bool
   -- TODO: ν moreover needs to biject with PNat (perhaps in a separate typeclass)
   -- so that we can use variable names as array indices
@@ -156,6 +157,16 @@ theorem eq_of_flip' {τ : PropAssignment ν} {l : L} {x : ν} {p : Bool} :
     simp [hEq, this]
   . exfalso; exact hSet (τ.set_get_of_ne p hEq ▸ h)
 
+def map [LitVar L V] [LitVar L' V'] (f : V → V') (l : L) : L' :=
+  LitVar.mkLit _ (f (LitVar.toVar l)) (LitVar.polarity l)
+
+@[simp] theorem satisfies_map [LitVar L V] [LitVar L' V']
+    [LawfulLitVar L' V'] (f : V → V') (l : L) (τ : PropAssignment V')
+  : τ ⊨ LitVar.toPropFun (LitVar.map f l : L') ↔ τ.map f ⊨ LitVar.toPropFun l
+  := by
+  simp [map, toPropFun]
+  split <;> simp
+
 end LitVar
 
 /-! ### Clauses -/
@@ -267,6 +278,32 @@ theorem toPropFun_take_lt (C : Clause L) (i : Nat) : toPropFun ⟨C.data.take i�
   intro σ hσ
   have ⟨l, hl, hl'⟩ := satisfies_iff.mp hσ
   refine satisfies_iff.mpr ⟨l, List.mem_of_mem_take hl, hl'⟩
+def or (c1 c2 : Clause L) : Clause L :=
+  c1 ++ c2
+
+@[simp] theorem satisfies_or (c1 c2 : Clause L) (τ : PropAssignment ν)
+  : τ ⊨ (c1.or c2).toPropFun ↔ τ ⊨ c1.toPropFun ∨ τ ⊨ c2.toPropFun := by
+  simp [or, satisfies_iff]
+  apply Iff.intro
+  · rintro ⟨l,h1,h2⟩
+    cases h1
+    · refine Or.inl ⟨l,?_⟩
+      simp [*]
+    · refine Or.inr ⟨l,?_⟩
+      simp [*]
+  · rintro (⟨l,h1,h2⟩|⟨l,h1,h2⟩)
+    · refine ⟨l,?_⟩
+      simp [*]
+    · refine ⟨l,?_⟩
+      simp [*]
+
+nonrec def map (L') [LitVar L' ν'] (f : ν → ν') (c : Clause L) : Clause L' :=
+  c.map (LitVar.map f)
+
+@[simp] theorem satisfies_map [LitVar L' ν'] [LawfulLitVar L' ν'] (f : ν → ν') (c : Clause L) (τ : PropAssignment ν')
+  : τ ⊨ (c.map L' f).toPropFun ↔ τ.map f ⊨ c.toPropFun
+  := by
+  simp [map, satisfies_iff]
 
 variable [DecidableEq ν]
 
@@ -292,7 +329,7 @@ def toPropForm (φ : Cnf L) : PropForm ν :=
   φ.data.foldr (init := .tr) (fun l φ => l.toPropForm.conj φ)
 
 def toPropFun (φ : Cnf L) : PropFun ν :=
-  φ.data.foldr (init := ⊤) (fun l φ => l.toPropFun ⊓ φ)
+  φ.data.map (·.toPropFun) |>.foldr (init := ⊤) (fun l φ => l ⊓ φ)
 
 @[simp] theorem mk_toPropForm (φ : Cnf L) : ⟦φ.toPropForm⟧ = φ.toPropFun := by
   simp only [toPropForm, toPropFun]
@@ -301,8 +338,9 @@ def toPropFun (φ : Cnf L) : PropFun ν :=
 open PropFun
 
 theorem satisfies_iff {τ : PropAssignment ν} {φ : Cnf L} :
-    τ ⊨ φ.toPropFun ↔ ∀ C ∈ φ.data, τ ⊨ C.toPropFun := by
+    τ ⊨ φ.toPropFun ↔ ∀ C ∈ φ, τ ⊨ C.toPropFun := by
   rw [toPropFun]
+<<<<<<< HEAD
   induction φ.data <;> simp [*]
 
 variable [DecidableEq ν]
@@ -312,5 +350,41 @@ theorem mem_vars (φ : Cnf L) (x : ν) :
   simp_rw [toPropForm]
   induction φ.data <;>
     simp_all [PropForm.vars, Clause.mem_vars]
+=======
+  rcases φ with ⟨φ⟩
+  induction φ <;> simp_all [Array.mem_def]
+
+def addClause (C : Clause L) (f : Cnf L) : Cnf L := f.push C
+
+@[simp] theorem satisfies_addClause (C : Clause L) (f : Cnf L) (τ : PropAssignment _)
+  : τ ⊨ (f.addClause C).toPropFun ↔ τ ⊨ f.toPropFun ⊓ C.toPropFun
+  := by
+  simp [satisfies_iff, Array.mem_def, addClause]; aesop
+
+def and (f1 f2 : Cnf L) : Cnf L := f1 ++ f2
+
+@[simp] theorem satisfies_and (f1 f2 : Cnf L) (τ : PropAssignment _)
+  : τ ⊨ (f1.and f2).toPropFun ↔ τ ⊨ f1.toPropFun ⊓ f2.toPropFun
+  := by
+  simp [satisfies_iff, Array.mem_def, and]; aesop
+
+def not (c : Clause L) : Cnf L :=
+  Array.map (fun l => #[-l]) c
+
+@[simp] theorem satisfies_not (c : Clause L) (τ : PropAssignment _) [LawfulLitVar L ν]
+  : τ ⊨ (not c).toPropFun ↔ ¬ τ ⊨ c.toPropFun
+  := by
+  simp [satisfies_iff, Clause.satisfies_iff, LitVar.satisfies_iff,
+    not, Array.mem_def, Bool.eq_not_iff]
+
+def all (ls : Array L) : Cnf L :=
+  Array.map (fun l => #[l]) ls
+
+@[simp] theorem satisfies_all (ls : Array L) (τ : PropAssignment ν) [LawfulLitVar L ν]
+  : τ ⊨ (all ls).toPropFun ↔ ∀ l : L, l ∈ ls → τ ⊨ LitVar.toPropFun l
+  := by
+  simp [satisfies_iff, Clause.satisfies_iff, LitVar.satisfies_iff,
+    all, Array.mem_def]
+>>>>>>> 1295298 (merge substitution theory from verified encoding branch)
 
 end Cnf
