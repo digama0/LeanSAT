@@ -37,6 +37,7 @@ variable {L : Type u} {ν : Type v} [LitVar L ν]
 instance : Coe ν L :=
   ⟨mkPos⟩
 
+-- Cayden TODO: Should this be InvolutiveNeg?
 instance : Neg L :=
   ⟨negate⟩
 
@@ -99,6 +100,47 @@ theorem mkPos_or_mkNeg (l : L) : l = mkPos (toVar l) ∨ l = mkNeg (toVar l) := 
     simp [mkLit]
   . apply Or.inl
     simp [mkLit]
+
+@[simp] theorem negate_mkPos (v : ν) : -((mkPos v) : L) = mkNeg v := by
+  ext
+  · simp only [toVar_negate, toVar_mkNeg, toVar_mkPos]
+  · simp only [polarity_negate, polarity_mkPos, Bool.not_true, polarity_mkNeg]
+
+@[simp] theorem negate_mkNeg (v : ν) : -((mkNeg v) : L) = mkPos v := by
+  ext
+  · simp only [toVar_negate, toVar_mkNeg, toVar_mkPos]
+  · simp only [polarity_negate, polarity_mkNeg, Bool.not_false, polarity_mkPos]
+
+@[simp] theorem negate_negate (l : L) : negate (negate l) = l := by
+  ext <;> simp only [negate_eq, toVar_negate, polarity_negate, Bool.not_not]
+
+-- Cayden Q: Can we get this for free from InvolutiveNeg? Should we add an instance : ?
+@[simp] theorem neg_neg (l : L) : -(-l) = l := by
+  rw [← negate_eq, ← negate_eq]; exact negate_negate l
+
+theorem ne_of_var_ne {l₁ l₂ : L} : (toVar l₁) ≠ (toVar l₂) → l₁ ≠ l₂ := by
+  intro hne
+  rw [ne_eq]
+  rintro rfl
+  contradiction
+
+theorem eq_negate_of_var_eq_of_ne {l₁ l₂ : L} : (toVar l₁) = (toVar l₂) → l₁ ≠ l₂ → l₁ = -l₂ := by
+  intro hvar hne
+  rcases mkPos_or_mkNeg l₁ with (h₁ | h₁)
+  · rcases mkPos_or_mkNeg l₂ with (h₂ | h₂)
+    · rw [h₁, h₂, hvar] at hne; contradiction
+    · rw [h₁, h₂, hvar, negate_mkNeg]
+  · rcases mkPos_or_mkNeg l₂ with (h₂ | h₂)
+    · rw [h₁, h₂, hvar, negate_mkPos]
+    · rw [h₁, h₂, hvar] at hne; contradiction
+
+-- Cayden TODO: there's probably a one-line proof of this
+theorem negate_eq_of_var_eq_of_ne {l₁ l₂ : L} : (toVar l₁) = (toVar l₂) → l₁ ≠ l₂ → -l₁ = l₂ := by
+  intro h₁ h₂
+  have := congrArg (-·) (eq_negate_of_var_eq_of_ne h₁ h₂)
+  simp at this
+  exact this
+  done
 
 @[simp] theorem toPropForm_mkPos (x : ν) : toPropForm (mkPos (L := L) x) = .var x := by
   simp [toPropForm]
@@ -199,6 +241,13 @@ def toPropForm (C : Clause L) : PropForm ν :=
 def toPropFun (C : Clause L) : PropFun ν :=
   C.data.foldr (init := ⊥) (fun l φ => (LitVar.toPropFun l) ⊔ φ)
 
+-- Cayden: these cannot be instances because a goal of type (PropForm ν) doesn't
+--         contain enough information to "look backward" and find a (Clause L), or
+--         vice versa. Encoding L in the type of ν, or vice versa, would help.
+-- See https://leanprover.zulipchat.com/#narrow/stream/113489-new-members/topic/cannot.20find.20synthesization.20order.20for.20instance
+--instance : Coe (Clause L) (PropForm ν) := ⟨toPropForm⟩
+--instance : Coe (Clause L) (PropFun ν) := ⟨toPropFun⟩
+
 @[simp] theorem mk_toPropForm (C : Clause L) : ⟦C.toPropForm⟧ = C.toPropFun := by
   dsimp [toPropForm, toPropFun]
   induction C.data <;> simp_all
@@ -284,18 +333,6 @@ def or (c1 c2 : Clause L) : Clause L :=
 @[simp] theorem satisfies_or (c1 c2 : Clause L) (τ : PropAssignment ν)
   : τ ⊨ (c1.or c2).toPropFun ↔ τ ⊨ c1.toPropFun ∨ τ ⊨ c2.toPropFun := by
   simp [or, satisfies_iff]
-  apply Iff.intro
-  · rintro ⟨l,h1,h2⟩
-    cases h1
-    · refine Or.inl ⟨l,?_⟩
-      simp [*]
-    · refine Or.inr ⟨l,?_⟩
-      simp [*]
-  · rintro (⟨l,h1,h2⟩|⟨l,h1,h2⟩)
-    · refine ⟨l,?_⟩
-      simp [*]
-    · refine ⟨l,?_⟩
-      simp [*]
 
 nonrec def map (L') [LitVar L' ν'] (f : ν → ν') (c : Clause L) : Clause L' :=
   c.map (LitVar.map f)
@@ -329,7 +366,7 @@ def toPropForm (φ : Cnf L) : PropForm ν :=
   φ.data.foldr (init := .tr) (fun l φ => l.toPropForm.conj φ)
 
 def toPropFun (φ : Cnf L) : PropFun ν :=
-  φ.data.map (·.toPropFun) |>.foldr (init := ⊤) (fun l φ => l ⊓ φ)
+  φ.data.foldr (init := ⊤) (fun l φ => l.toPropFun ⊓ φ)
 
 @[simp] theorem mk_toPropForm (φ : Cnf L) : ⟦φ.toPropForm⟧ = φ.toPropFun := by
   simp only [toPropForm, toPropFun]
@@ -338,9 +375,8 @@ def toPropFun (φ : Cnf L) : PropFun ν :=
 open PropFun
 
 theorem satisfies_iff {τ : PropAssignment ν} {φ : Cnf L} :
-    τ ⊨ φ.toPropFun ↔ ∀ C ∈ φ, τ ⊨ C.toPropFun := by
+    τ ⊨ φ.toPropFun ↔ ∀ C ∈ φ.data, τ ⊨ C.toPropFun := by
   rw [toPropFun]
-<<<<<<< HEAD
   induction φ.data <;> simp [*]
 
 variable [DecidableEq ν]
@@ -350,9 +386,6 @@ theorem mem_vars (φ : Cnf L) (x : ν) :
   simp_rw [toPropForm]
   induction φ.data <;>
     simp_all [PropForm.vars, Clause.mem_vars]
-=======
-  rcases φ with ⟨φ⟩
-  induction φ <;> simp_all [Array.mem_def]
 
 def addClause (C : Clause L) (f : Cnf L) : Cnf L := f.push C
 
@@ -385,6 +418,5 @@ def all (ls : Array L) : Cnf L :=
   := by
   simp [satisfies_iff, Clause.satisfies_iff, LitVar.satisfies_iff,
     all, Array.mem_def]
->>>>>>> 1295298 (merge substitution theory from verified encoding branch)
 
 end Cnf

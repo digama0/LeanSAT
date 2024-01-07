@@ -349,3 +349,13 @@ def any (a : Array (PropFun ν)) : PropFun ν :=
   : τ ⊨ any a ↔ ∃ f ∈ a, τ ⊨ f
   := by rcases a with ⟨L⟩; unfold any; rw [Array.foldr_eq_foldr_data]; simp [Array.mem_def]
         induction L <;> simp [*]
+def satisfiable (φ : PropFun ν) : Prop :=
+  ∃ (τ : PropAssignment ν), τ ⊨ φ
+
+def eqsat (φ₁ φ₂ : PropFun ν) : Prop :=
+  satisfiable φ₁ ↔ satisfiable φ₂
+
+theorem eqsat_of_entails {F C : PropFun ν} : entails F C → eqsat (F ⊓ C) F := by
+  intro h_entails
+  simp only [eqsat, satisfiable, ge_iff_le, satisfies_conj]
+  exact ⟨fun ⟨τ, hτ, _⟩ => ⟨τ, hτ⟩, fun ⟨τ, hτ⟩ => ⟨τ, hτ, h_entails τ hτ⟩⟩

@@ -92,10 +92,86 @@ abbrev ICnf := Cnf ILit
 def ICnf.maxVar (fml : ICnf) : Nat :=
   fml.maxBy (·.maxBy (LitVar.toVar · |>.val) |>.getD 0) |>.getD 0
 
+namespace IVar
+
+open LitVar LeanSAT.Model
+
+def toPropFun (v : IVar) : PropFun IVar := .var v
+
+protected def index (v : IVar) : Nat := v.val - 1
+protected def fromIndex (n : Nat) : IVar := ⟨n + 1, Nat.succ_pos _⟩
+
+theorem index_succ_eq (v : IVar) : ⟨v.index + 1, Nat.succ_pos _⟩ = v := by
+  rw [Subtype.ext_iff]
+  simp [IVar.index]
+  rw [Nat.sub_add_cancel]
+  · rfl
+  · exact v.property
+
+theorem fromIndex_index (v : IVar) : IVar.fromIndex v.index = v :=
+  index_succ_eq v
+
+theorem index_eq_iff {v v' : IVar} : v.index = v'.index ↔ v = v' := by
+  simp [IVar.index]
+  exact ⟨PNat.natPred_inj.mp, fun h => by rw [h]⟩
+
+theorem index_ne_iff {v v' : IVar} : v.index ≠ v'.index ↔ v ≠ v' := by
+  constructor
+  · rintro hne rfl; contradiction
+  · intro hne hcon
+    rw [index_eq_iff.mp hcon] at hne
+    contradiction
+
+-- TODO: Possible proof of injectivity (see Function.Injective), but would then depend on Mathlib
+-- Although we already do, because Mathlib defines PNat...
+
+end IVar
+
 namespace ILit
 
-open LitVar in
+open LitVar LeanSAT.Model
+
+-- Cayden question: Can you @[simp] an abbrev? How is that different from a def?
+@[simp] abbrev toPropFun (l : ILit) : PropFun IVar := LitVar.toPropFun l
+
+protected def index (l : ILit) : Nat := (toVar l).val - 1
+protected def fromIndex (n : Nat) : ILit := mkPos ⟨n + 1, Nat.succ_pos _⟩
+
+@[simp] theorem toVar_index_eq_index (l : ILit) : (toVar l).index = l.index := rfl
+
+-- Cayden question: how to @[simp] this without going back and forth?
+theorem index_negate (l : ILit) : (-l).index = l.index := by simp [ILit.index]
+
+@[simp] theorem mkPos_index_eq (v : IVar) : ILit.index (mkPos v) = v.index := by
+  simp [ILit.index, IVar.index]
+
+@[simp] theorem mkNeg_index_eq (v : IVar) : ILit.index (mkNeg v) = v.index := by
+  simp [ILit.index, IVar.index]
+
 theorem exists_succ_toVar (l : ILit) : ∃ n, (toVar l).val = n + 1 := by
   exact Nat.exists_eq_add_of_le' (toVar l).property
+
+-- TODO: A simpler proof exists, possibly using Subtype.ext(_iff)
+theorem index_ne_of_var_ne {l₁ l₂ : ILit} : (toVar l₁) ≠ (toVar l₂) → l₁.index ≠ l₂.index := by
+  intro hne
+  simp only [← toVar_index_eq_index]
+  exact IVar.index_ne_iff.mpr hne
+
+theorem index_eq_iff_eq_or_negate_eq {l₁ l₂ : ILit} : l₁.index = l₂.index ↔ l₁ = l₂ ∨ (negate l₁) = l₂ := by
+  constructor
+  · intro hlit
+    simp only [← toVar_index_eq_index] at hlit
+    have := IVar.index_eq_iff.mp hlit
+    by_cases hpol : polarity l₁ = polarity l₂
+    · left; ext
+      · exact this
+      · exact hpol
+    · rw [← toVar_negate l₁] at this
+      right; ext
+      · exact this
+      · rwa [← Bool.bnot_eq, ← polarity_negate] at hpol
+  · rintro (rfl | rfl)
+    · rfl
+    · rw [negate_eq, index_negate]
 
 end ILit

@@ -7,6 +7,7 @@ Authors: Wojciech Nawrocki
 import Mathlib.Tactic.Linarith
 import Mathlib.Data.Fintype.Basic
 import Mathlib.Data.Finset.Basic
+import Mathlib.Tactic
 
 /-! Stuff that seems like it should be in std or mathlib. -/
 
@@ -19,10 +20,13 @@ import Mathlib.Data.Finset.Basic
 @[simp] theorem Bool.eq_false_iff_eq_false (a b : Bool) :
   (a = false ↔ b = false) ↔ (a = b) := by cases a <;> cases b <;> decide
 
-theorem Bool.bnot_eq (a b : Bool) :
-  ((!a) = b) ↔ ¬(a = b) := by cases a <;> cases b <;> decide
+-- Cayden TODO: Mathlib priority binding makes this theorem not equivalent to not_eq_iff
+theorem Bool.bnot_eq (a b : Bool) : ((!a) = b) ↔ ¬(a = b) := by
+  rw [← ne_eq]; cases a <;> cases b <;> simp
+
+-- Cayden TODO: Replace with the appropriate Mathlib theorem, eq_not_iff
 theorem Bool.eq_bnot (a b : Bool) :
-  (a = (!b)) ↔ ¬(a = b) := by cases a <;> cases b <;> decide
+  (a = (!b)) ↔ ¬(a = b) := by exact eq_not_iff
 
 /-- Notation typeclass for semantic entailment `⊨`. -/
 class SemanticEntails (α : Type u) (β : outParam $ Type v) where
@@ -38,6 +42,19 @@ theorem Int.eq_zero_of_lt_neg_iff_lt (i : Int) : (0 < -i ↔ 0 < i) → i = 0 :=
   by_cases hLt : 0 < i
   . have := h.mpr hLt; linarith
   . have : ¬ 0 < -i := fun h₂ => hLt (h.mp h₂); linarith
+
+-- TODO: Simpler proof? Perhaps by matching on i?
+theorem Int.toNat_negate_of_lt_zero {i : Int} : i < 0 → (-i).toNat = -i := by
+  intro hi
+  unfold toNat
+  cases' hij : -i with j j
+  · simp only [ofNat_eq_coe]
+  · have : negSucc j < 0 := negSucc_lt_zero j
+    rw [← hij] at this
+    have := Int.not_lt.mpr (le_of_lt this)
+    exact absurd (Int.neg_pos_of_neg hi) this
+
+@[simp] theorem Int.negate_negSucc {n : Nat} : -(negSucc n) = n + 1 := rfl
 
 instance : HAdd PNat Nat PNat where
   hAdd | ⟨a,h⟩, b => ⟨a+b, Nat.add_pos_left h _⟩
@@ -151,8 +168,10 @@ def Finset.getUnique (xs : Finset α) (h : ∃ x, xs = {x}) : α :=
   simp at hL; cases hL
   simp
 
-theorem List.Perm.find?_unique {f : α → Bool}
-    (hunique : ∀ a1 a2, f a1 → f a2 → a1 = a2) (h : a ~ b)
+-- Cayden note/TODO: Added {a b : List α} and swapped out (h : a ~ b) with (h : Perm a b)
+--   Occurred due to Lean upgrade from 4.4.0 to 4.5.0 (?)
+theorem List.Perm.find?_unique {f : α → Bool} {a b : List α}
+    (hunique : ∀ a1 a2, f a1 → f a2 → a1 = a2) (h : Perm a b)
   : a.find? f = b.find? f := by
   induction h with
   | nil => simp
@@ -168,7 +187,7 @@ def Multiset.find? (f : α → Bool) (xs : Multiset α)
   xs.lift (·.find? f) (by
     intro a b perm
     simp
-    apply perm.find?_unique h
+    apply List.Perm.find?_unique h perm
   )
 
 theorem Multiset.mem_of_find?_eq_some (xs : Multiset α)

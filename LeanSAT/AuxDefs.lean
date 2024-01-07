@@ -1,4 +1,5 @@
 import Std
+import Mathlib.Data.List.Basic
 
 -- Cayden note: Possible @[simp] lemmas for if b then c else d = c → b, etc.
 /-
@@ -70,6 +71,9 @@ def Array.foldrIdx {α : Type u} {β : Type v} (as : Array α) (f : Fin as.size 
 --theorem Array.foldlIdx_index_eq (as : Array α) (f : β → Fin as.size → α → β) (init : β) :
   --as.foldlIdx = something about Array.enum
 
+@[simp] def comm_in_second_arg (f : β → α → β) : Prop :=
+  ∀ (b : β) (a₁ a₂ : α), f (f b a₁) a₂ = f (f b a₂) a₁
+
 theorem Array.foldlIdx_of_comm (A : Array α) (f : β → Fin A.size → α → β) (init : β) :
     -- Commutativity assumption
     (∀ (acc : β) (idx₁ idx₂ : Fin A.size),
@@ -77,6 +81,27 @@ theorem Array.foldlIdx_of_comm (A : Array α) (f : β → Fin A.size → α → 
 
     -- For all indexes, we can move its function application to the end
     ∀ (idx : Fin A.size), ∃ (acc : β), A.foldlIdx f init = f acc idx (A.get idx) := by sorry
+
+theorem List.foldl_of_comm (L : List α) (f : β → α → β) (init : β) :
+    comm_in_second_arg f →
+    ∀ a ∈ L, ∃ (acc : β), L.foldl f init = f acc a := by
+  intro hf
+  induction L with
+  | nil => simp
+  | cons x xs ih =>
+    intro a ha
+    rcases List.eq_or_mem_of_mem_cons ha with (rfl | ha)
+    · simp
+      sorry
+      done
+    sorry
+    done
+  done
+
+-- TODO: Check to see if a similar theorem exists for lists.
+theorem Array.foldl_of_comm (A : Array α) (f : β → α → β) (init : β) :
+    (∀ (acc : β) (a₁ a₂ : α), f (f acc a₁) a₂ = f (f acc a₂) a₁) →
+    ∀ a ∈ A, ∃ (acc : β), A.foldl f init = f acc a := by sorry
 
 
 /-! # ResultT -/

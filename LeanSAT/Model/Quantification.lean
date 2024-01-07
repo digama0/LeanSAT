@@ -4,6 +4,7 @@ Authors: James Gallicchio
 -/
 
 import LeanSAT.Model.PropVars
+import Mathlib.Data.List.Basic
 
 namespace LeanSAT.Model
 
@@ -15,6 +16,10 @@ This file defines operations on `PropForm` and `PropFun` for
 -/
 
 /-! ### Substitution -/
+
+-- Cayden TODO: Any better way to express a substitution? Use type constructors/transformers?
+--def PropFormSubst (ν₁ : Type u) (ν₂ : Type v) := ν₁ → PropForm ν₂
+--def PropFunSubst (ν₁ : Type u) (ν₂ : Type v) := ν₁ → PropFun ν₂
 
 def PropForm.bind (p : PropForm ν₁) (f : ν₁ → PropForm ν₂) : PropForm ν₂ :=
   match p with
@@ -41,9 +46,27 @@ open PropFun in
 def PropAssignment.preimage (f : ν → PropFun ν') (τ : PropAssignment ν') : PropAssignment ν :=
   fun v => τ ⊨ f v
 
-@[simp] theorem PropForm.satisfies_bind [DecidableEq ν] (φ : PropForm ν) (f : ν → PropForm ν') {τ : PropAssignment ν'}
+@[simp] theorem PropForm.satisfies_bind {φ : PropForm ν₁} {f : ν₁ → PropForm ν₂} {τ : PropAssignment ν₂}
   : τ ⊨ φ.bind f ↔ τ.preimage (⟦f ·⟧) ⊨ φ
   := by induction φ <;> simp [bind, PropAssignment.preimage, *]; rw [PropFun.satisfies_mk]
+
+-- Cayden question: Better to use equivalence or ⟦ ⟧ = ⟦ ⟧?
+theorem PropForm.bind_congr (σ : ν₁ → PropForm ν₂) {φ₁ φ₂ : PropForm ν₁} :
+    (equivalent φ₁ φ₂) → (⟦φ₁.bind σ⟧ : PropFun _) = ⟦φ₂.bind σ⟧ := by
+  intro h_eq
+  apply PropFun.ext
+  intro τ
+  rw [PropFun.satisfies_mk, PropFun.satisfies_mk, satisfies_bind, satisfies_bind,
+      ← PropFun.satisfies_mk, ← PropFun.satisfies_mk, Quotient.sound h_eq]
+
+/-
+theorem PropForm.var_satisfies_bind {v : ν₁} {σ : ν₁ → PropForm ν₂} :
+    (∀ (τ : PropAssignment ν₂), τ ⊨ σ v) ↔ σ v = .tr := by
+  sorry
+  done
+  -/
+
+/-! # subst (on single variable) -/
 
 def PropForm.subst [DecidableEq ν] (φ : PropForm ν) (v : ν) (φ' : PropForm ν) : PropForm ν :=
   φ.bind (fun v' => if v' = v then φ' else .var v')
@@ -170,7 +193,7 @@ def attach : (φ : PropForm ν) → PropForm {v : ν // v ∈ φ.vars }
   induction φ
     <;> simp [vars] at h
     -- TODO: this aesop is very, very slow...
-    <;> aesop
+    <;> sorry -- aesop  -- (Cayden commented out because it's slow)
 
 theorem satisfies_attach (φ : PropForm ν) (τ : PropAssignment ν)
     (τ' : PropAssignment φ.vars) (h : ∀ v : φ.vars, τ' v = τ v)
@@ -386,9 +409,8 @@ def PropFun.subst [DecidableEq ν] (ψ : PropFun ν) (v : ν) (φ : PropFun ν) 
       simp
       rw [PropForm.subst_congr]
       · simp
-      · apply PropFun.sound h
-      )
-    ) (by
+      · apply PropFun.sound h))
+  (by
     intro a b h
     ext τ
     simp
@@ -396,11 +418,23 @@ def PropFun.subst [DecidableEq ν] (ψ : PropFun ν) (v : ν) (φ : PropFun ν) 
     ext φ
     apply PropForm.subst_congr
     · apply PropFun.sound h
-    · simp
-    )
+    · simp)
 
-theorem PropFun.satisfies_subst [DecidableEq ν] (ψ : PropFun ν)
-      (v : ν) (φ : PropFun ν) (τ : PropAssignment ν)
+def PropFun.bind (σ : ν₁ → PropForm ν₂) : PropFun ν₁ → PropFun ν₂ :=
+  Quotient.lift (⟦PropForm.bind · σ⟧) (fun _ _ h => PropForm.bind_congr σ h)
+
+theorem PropFun.bind_var {f : ν₁ → PropForm ν₂} {v : ν₁} {φ : PropForm ν₂} :
+    PropFun.bind f ⟦v⟧ = ⟦φ⟧ ↔ f v = φ := by
+  sorry
+  done
+
+@[simp] theorem PropFun.satisfies_bind {φ : PropFun ν₁} {f : ν₁ → PropForm ν₂} {τ : PropAssignment ν₂} :
+    τ ⊨ φ.bind f ↔ τ.preimage (⟦f ·⟧) ⊨ φ := by
+  have ⟨φ, hφ⟩ := φ.exists_rep; cases hφ
+  simp [bind]
+  rw [satisfies_mk, satisfies_mk, PropForm.satisfies_bind]
+
+theorem PropFun.satisfies_subst [DecidableEq ν] {φ ψ : PropFun ν} {v : ν} {τ : PropAssignment ν}
   : τ ⊨ ψ.subst v φ ↔ τ.set v (τ ⊨ φ) ⊨ ψ := by
   have ⟨ψ,hψ⟩ := ψ.exists_rep; cases hψ
   have ⟨φ,hφ⟩ := φ.exists_rep; cases hφ
@@ -459,7 +493,7 @@ where
     intro a b ha hb
     have h1 := ha
     rw [←hb] at h1
-    have : a ~ b := Quotient.eq_rel.mp h1
+    have : List.Perm a b := Quotient.eq_rel.mp h1
     simp; clear ha hb h1
     induction this generalizing φ with
     | nil         => simp at *

@@ -283,6 +283,26 @@ def Array.setF (A : Array α) (i : Nat) (v default : α) : Array α :=
       | j + 1 => go j (A'.push default)
     go (i - A.size) A
 
+-- Cayden TODO: An alternate setting that transforms the cell rather than overwriting it
+-- Possible time savings
+def Array.setF' (A : Array α) (i : Nat) (f : Option α → α) (default : α) : Array α :=
+  if hi : i < A.size then
+    A.set ⟨i, hi⟩ (f (A.get ⟨i, hi⟩))
+  else
+    let rec go (j : Nat) (A' : Array α) : Array α :=
+      match j with
+      | 0 => A'.push (f none)
+      | j + 1 => go j (A'.push default)
+    go (i - A.size) A
+
+theorem Array.setF_eq_setF' {A : Array α} {i : Nat} {f : Option α → α} {v default : α} :
+    (∀ (x : Option α), f x = v) → A.setF i v default = A.setF' i f default := by
+  intro hf
+  simp [setF, setF']
+  by_cases hi : i < A.size
+  <;> simp [hi, hf]
+  · sorry
+
 theorem Array.setF_eq_set {A : Array α} {i : Nat} (hi : i < A.size) (v default : α) :
     A.setF i v default = A.set ⟨i, hi⟩ v := by
   simp [setF, hi]
@@ -309,7 +329,7 @@ theorem Array.size_setF_go (A : Array α) (i : Nat) (v default : α) :
     (Array.setF.go v default i A).size = A.size + i + 1 := by
   rw [Array.setF_go_eq, Array.size_push, Array.size_append, Array.size_mkArray]
 
-theorem Array.size_setF (A : Array α) (i : Nat) (v default : α) :
+@[simp] theorem Array.size_setF (A : Array α) (i : Nat) (v default : α) :
     (A.setF i v default).size = max A.size (i + 1) := by
   rcases Nat.lt_trichotomy i A.size with (hi | rfl | hi)
   · rw [Array.setF_eq_set hi, Array.size_set]
@@ -320,6 +340,11 @@ theorem Array.size_setF (A : Array α) (i : Nat) (v default : α) :
   · simp [setF, Nat.lt_asymm hi, Array.setF_go_eq]
     rw [max_eq_right (Nat.le_succ_of_le (le_of_lt hi)),
       ← Nat.add_sub_assoc (le_of_lt hi), add_comm (size A) i, Nat.add_sub_cancel]
+
+theorem Array.size_le_setF_size (A : Array α) (i : Nat) (v default : α) :
+    A.size ≤ (A.setF i v default).size := by
+  rw [Array.size_setF]
+  exact Nat.le_max_left (size A) (i + 1)
 
 theorem Array.lt_size_setF (A : Array α) (i : Nat) (v default : α) :
     i < size (A.setF i v default) := by
@@ -377,6 +402,12 @@ theorem Array.mem_setF (A : Array α) (i : Nat) (v default : α) :
 -- TODO: Expand this into the upper definition later
 theorem Array.get_setF (A : Array α) (i : Nat) (v default : α) :
     (A.setF i v default).get ⟨i, Array.lt_size_setF A i v default⟩ = v := by sorry
+
+theorem Array.get_setF' (A : Array α) (i : Nat) (v default : α) :
+  ∀ {j : Fin A.size}, j.val ≠ i →
+    (A.setF i v default).get ⟨j.val, lt_of_lt_of_le j.isLt (Array.size_le_setF_size _ _ _ _)⟩ = A.get j := by
+  sorry
+  done
 
 theorem Array.getElem_setF (A : Array α) (i : Nat) (v default : α) :
     (A.setF i v default)[i]'(Array.lt_size_setF A i v default) = v := by
