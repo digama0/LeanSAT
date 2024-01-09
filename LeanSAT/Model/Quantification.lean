@@ -423,10 +423,8 @@ def PropFun.subst [DecidableEq ν] (ψ : PropFun ν) (v : ν) (φ : PropFun ν) 
 def PropFun.bind (σ : ν₁ → PropForm ν₂) : PropFun ν₁ → PropFun ν₂ :=
   Quotient.lift (⟦PropForm.bind · σ⟧) (fun _ _ h => PropForm.bind_congr σ h)
 
-theorem PropFun.bind_var {f : ν₁ → PropForm ν₂} {v : ν₁} {φ : PropForm ν₂} :
-    PropFun.bind f ⟦v⟧ = ⟦φ⟧ ↔ f v = φ := by
-  sorry
-  done
+@[simp] def PropFun.bind_distrib {f : ν₁ → PropForm ν₂} {v : ν₁} :
+    PropFun.bind f ⟦v⟧ = ⟦f v⟧ := rfl
 
 @[simp] theorem PropFun.satisfies_bind {φ : PropFun ν₁} {f : ν₁ → PropForm ν₂} {τ : PropAssignment ν₂} :
     τ ⊨ φ.bind f ↔ τ.preimage (⟦f ·⟧) ⊨ φ := by

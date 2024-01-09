@@ -124,6 +124,20 @@ theorem ne_of_var_ne {l₁ l₂ : L} : (toVar l₁) ≠ (toVar l₂) → l₁ �
   rintro rfl
   contradiction
 
+theorem ne_of_polarity_ne {l₁ l₂ : L} : polarity l₁ ≠ polarity l₂ → l₁ ≠ l₂ := by
+  intro hne
+  rw [ne_eq]
+  rintro rfl
+  contradiction
+
+@[simp] theorem ne_neg_self (l : L) : l ≠ -l := by
+  apply ne_of_polarity_ne
+  simp only [polarity_negate, ne_eq, Bool.not_eq_not]
+
+@[simp] theorem neg_ne_self (l : L) : -l ≠ l := by
+  apply ne_of_polarity_ne
+  simp only [polarity_negate, ne_eq, Bool.not_not_eq]
+
 theorem eq_negate_of_var_eq_of_ne {l₁ l₂ : L} : (toVar l₁) = (toVar l₂) → l₁ ≠ l₂ → l₁ = -l₂ := by
   intro hvar hne
   rcases mkPos_or_mkNeg l₁ with (h₁ | h₁)
@@ -140,7 +154,15 @@ theorem negate_eq_of_var_eq_of_ne {l₁ l₂ : L} : (toVar l₁) = (toVar l₂) 
   have := congrArg (-·) (eq_negate_of_var_eq_of_ne h₁ h₂)
   simp at this
   exact this
-  done
+
+theorem eq_trichotomy (l₁ l₂ : L) : l₁ = l₂ ∨ l₁ = -l₂ ∨ (toVar l₁) ≠ (toVar l₂) := by
+  by_cases hvar : toVar l₁ = toVar l₂
+  · by_cases hpol : polarity l₁ = polarity l₂
+    · exact Or.inl (LawfulLitVar.ext _ _ hvar hpol)
+    · have := congrArg (-·) (negate_eq_of_var_eq_of_ne hvar (ne_of_polarity_ne hpol))
+      simp at this
+      exact Or.inr (Or.inl this)
+  · exact Or.inr (Or.inr hvar)
 
 @[simp] theorem toPropForm_mkPos (x : ν) : toPropForm (mkPos (L := L) x) = .var x := by
   simp [toPropForm]

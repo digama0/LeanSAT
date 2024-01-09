@@ -277,8 +277,8 @@ def bump (τ : PPA) : PPA :=
 
 /-- Helper theorem for `setVar*`. -/
 theorem setVar_le_maxGen (τ : PPA) (i : Nat) (b : Bool) (gen : Nat) :
-  let v : Int := if b then gen else -gen
-  ∀ g ∈ (τ.assignment.setF i v 0).data, g.natAbs ≤ Nat.max τ.maxGen gen := by
+    let v : Int := if b then gen else -gen
+    ∀ g ∈ (τ.assignment.setF i v 0).data, g.natAbs ≤ Nat.max τ.maxGen gen := by
   intro v g hg
   have := Array.mem_setF _ _ _ _ g hg
   rcases this with h | h | h
@@ -658,7 +658,6 @@ theorem SatisfiesM_UP (τ : PPA) (C : IClause) :
         -- Cayden question: Is this proof more compact if I use pattern-matching with intro?
       intro
       | none, hbox =>
-        simp only
         intro j hj
         unfold pevalUP at hbox
         cases h_tau : τ.litValue? C[i.val] with
@@ -763,12 +762,12 @@ theorem extended_of_UP_unit {τ τ' : PPA} {C : IClause} {l : ILit} :
   intro h_unit
   split at h_unit
   <;> try simp at h_unit
-  rename (ILit) => lit
+  rename ILit => lit
   rename (foldUP τ C = ok (some lit)) => h
   rcases h_unit with ⟨rfl, rfl⟩
   have hlv := SatisfiesM_ResultT_eq.mp (SatisfiesM_UP τ C) (some lit) h
   clear h
-  rcases hlv with ⟨hlit, hτlit, h_rest⟩
+  rcases hlv with ⟨hlit, hτlit, ih⟩
   constructor
   · refine entails_ext.mpr fun τ' hτ' => ?_
     rw [satisfies_conj] at hτ'; rcases hτ' with ⟨hCτ', hττ'⟩
@@ -779,11 +778,11 @@ theorem extended_of_UP_unit {τ τ' : PPA} {C : IClause} {l : ILit} :
       by_cases hmeq : m = l
       · subst hmeq; exact hmτ'
       · by_cases h_vareq : toVar l = toVar m
-        · have := h_rest _ hm hmeq
+        · have := ih _ hm hmeq
           simp [← negate_eq_of_var_eq_of_ne h_vareq (Ne.symm hmeq), hτlit] at this
         · rw [satisfies_iff_lits] at hττ'
           have := litValue?_negate τ m
-          simp only [h_rest _ hm hmeq, Option.map_some', Bool.not_false] at this
+          simp only [ih _ hm hmeq, Option.map_some', Bool.not_false] at this
           have := hττ' this
           simp at this
           exact absurd hmτ' this
