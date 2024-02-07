@@ -18,6 +18,24 @@ def cardPred (lits : List L) (P : Nat → Prop) [DecidablePred P] : PropFun ν :
   : τ ⊨ cardPred lits P ↔ P (card lits τ) := by
   unfold cardPred; simp
 
+theorem _root_.Multiset.lt_card_iff_exists_cons (n : Nat) (s : Multiset α)
+  : n < Multiset.card s ↔ ∃ x s', s = x ::ₘ s' ∧ n ≤ Multiset.card s' := by
+  have := s.exists_rep; rcases this with ⟨s,rfl⟩
+  cases s
+  case nil => simp
+  case cons hd tl =>
+    simp [Nat.lt_succ]
+    refine ⟨fun h => ⟨hd,tl,?mp⟩,?mpr⟩
+    · simp [*]
+    · rintro ⟨hd',tl',h1,h2⟩
+      have := congrArg Multiset.card h1
+      simp at this
+      aesop
+
+theorem _root_.Multiset.le_coe_iff_get (s : Multiset α) (L : List α)
+  : s ≤ ↑L ↔ ∃ is : Finset (Fin L.length), (is.map ⟨L.get,List.get.injective⟩).val = s := by
+  sorry
+
 def amoPairwise (lits : Array L) : VEncCNF L Unit (cardPred lits.data (· ≤ 1)) :=
   -- for every pair x,y of literals in `lits`, they can't both be true
   (for_all (Array.ofFn id) fun (i : Fin lits.size) =>
@@ -28,7 +46,49 @@ def amoPairwise (lits : Array L) : VEncCNF L Unit (cardPred lits.data (· ≤ 1)
     rcases lits with ⟨list⟩
     ext τ
     simp [Clause.toPropFun, any, Array.getElem_eq_data_get]
+    unfold card; rw [← Multiset.coe_countP]
     simp only [Array.size]
+    refine ⟨?mp,?mpr⟩
+    case mp =>
+      intro assum
+      rw [Multiset.countP_eq_card_filter, Multiset.card_filter_le_iff]
+      simp [Multiset.lt_card_iff_exists_cons, Nat.succ_le]
+      rintro _ hsub x1 _ rfl x2 rest rfl
+      rw [Multiset.le_coe]
+      rw [Multiset.le_iff_exists_add] at hsub
+      have := sub.exists
+      match satisfiedList with
+      | x1 :: x2 :: rest =>
+        clear contra
+        have sat1 := by
+          have : x1 ∈ List.filter _ list := h.symm ▸ List.Mem.head _
+          simpa using this
+        have sat2 := by
+          have : x2 ∈ List.filter _ list := h.symm ▸ List.Mem.tail _ (List.Mem.head _)
+          simpa using this
+        rw [List.mem_filter] at sat1 sat2; simp at sat1 sat2
+        rcases sat1 with ⟨-,sat1⟩
+        rcases sat2 with ⟨-,sat2⟩
+        replace h := h ▸ List.filter_sublist list
+        replace h := List.sublist_eq_map_get h
+        rcases h with ⟨is,h1,h2⟩
+        match is with
+        | i1 :: i2 :: irest =>
+        simp at h1 h2
+        rcases h1 with ⟨rfl,rfl,-⟩
+        rcases h2 with ⟨⟨h2,-⟩,-⟩
+        specialize assum i1 i2
+        aesop
+    case mpr =>
+      intro hlen i1 i2
+      split
+      · trivial
+      simp only [satisfies_disj, satisfies_neg, ← not_and_or]
+      rintro ⟨hi1,hi2⟩
+      open scoped List in
+      have : [List.get list i1, List.get list i2] <+~ satisfiedList := by
+        sorry
+    stop
     by_cases h : card list τ = 0
     · simp [h]
       intro x y; split <;> simp
