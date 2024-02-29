@@ -73,3 +73,50 @@ def amoPairwise (lits : Array L) :
       simp at r
       omega
   )
+
+open EncCNF (WithTemps) in
+/-- At-most-one cut4 encoding. The literals are divided into many small groups,
+like `lits = L₁ ++ L₂ ++ ... ++ Lₙ`.
+Then we add `n` auxiliary variables `tᵢ` representing whether a literal
+to the left of `Lᵢ` is true.
+Then we can encode "at most one of `lits`" as a conjunction:
+- ∀ i, at most one of `[tᵢ] ++ Lᵢ ++ [¬tᵢ₊₁]`
+-/
+def amoCut4 (lits : Array L) (h : lits.size > 4) : VEncCNF L Unit (atMost 1 (Multiset.ofList lits.data)) :=
+  let firstGrpSize := 3
+  let middleGrps := (lits.size - 5) / 2
+  let lastGrpSize := lits.size - firstGrpSize - 2 * middleGrps
+  withTemps (middleGrps + 1) (
+    seq[
+      amoPairwise #[
+        WithTemps.var (lits[0]'(by trans 4; decide; assumption))
+      , WithTemps.var (lits[1]'(by trans 4; decide; assumption))
+      , WithTemps.var (lits[2]'(by trans 4; decide; assumption))
+      , WithTemps.temp 0
+      ]
+    , for_all (Array.ofFn id) (fun (i : Fin middleGrps) =>
+        amoPairwise #[
+          WithTemps.temp i.castSucc
+        , WithTemps.var (lits[3 + 2 * i.val]'(by
+            rcases i with ⟨i,hi⟩; simp (config := {zeta:=true}) at hi ⊢
+            zify at hi ⊢; simp [Nat.cast_sub h] at hi; omega))
+        , WithTemps.var (lits[4 + 2 * i.val]'(by
+            rcases i with ⟨i,hi⟩; simp (config := {zeta:=true}) at hi ⊢
+            zify at hi ⊢; simp [Nat.cast_sub h] at hi; omega))
+        , WithTemps.temp i.succ
+        ]
+        )
+    , amoPairwise <|
+        #[WithTemps.temp <| Fin.last middleGrps] ++
+        lits[lits.size-lastGrpSize:lits.size].toArray.map WithTemps.var
+    ]
+  )
+  |>.mapProp (by
+    ext τ; simp
+    constructor
+    · rintro ⟨σ, rfl, h⟩
+      sorry
+    · intro h
+      use fun | Sum.inl x => sorry | Sum.inr x => sorry
+      sorry
+  )
