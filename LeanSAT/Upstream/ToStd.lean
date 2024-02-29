@@ -162,6 +162,23 @@ def Array.maxBy (f : α → β) [Max β] (A : Array α) : Option β :=
   else
     none
 
+theorem Array.data_concatMap (A : Array α) (f : α → Array β)
+  : (A.concatMap f).data = A.data.bind (fun a => (f a).data) := by
+  rcases A with ⟨L⟩
+  simp [concatMap]
+  rw [foldl_eq_foldl_data]
+  simp
+  suffices ∀ acc,
+    (List.foldl (fun bs a => bs ++ f a) acc L).data = acc.data ++ List.bind L (fun a => (f a).data)
+    by simpa using this #[]
+  induction L
+  · simp [empty]
+  case cons hd tl ih =>
+    intro acc
+    simp
+    rw [ih]; clear ih
+    simp
+
 def List.distinct [DecidableEq α] (L : List α) : List α :=
   L.foldl (·.insert ·) []
 
