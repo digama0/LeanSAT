@@ -115,8 +115,7 @@ def toPropFun_all_conjuncts : (f : NegNormForm L) → toPropFun (.all (conjuncts
 | fls   => by simp [conjuncts, toPropFun, Array.attach, PropFun.all]
 | lit l => by simp [conjuncts, toPropFun, Array.attach, PropFun.all]
 | all as => by
-  stop
-  have : ∀ a ∈ as, _ := fun a h =>
+  have : ∀ a ∈ as, _ := fun a _h =>
     toPropFun_all_conjuncts a
   ext τ
   simp_rw [PropFun.ext_iff, imp_forall_iff] at this
@@ -133,8 +132,7 @@ def toPropFun_all_conjuncts : (f : NegNormForm L) → toPropFun (.all (conjuncts
   · rintro h _ x2 x1 hx1 hx2 - - - -
     apply h _ _ hx1 hx1 rfl _ _ hx2 hx2 rfl
 | any as => by
-  stop
-  have : ∀ a ∈ as, _ := fun a h =>
+  have : ∀ a ∈ as, _ := fun a _h =>
     toPropFun_any_disjuncts a
   ext τ
   simp [toPropFun, conjuncts, Array.data_concatMap, Array.attach, Array.mem_def]
@@ -157,7 +155,7 @@ def toPropFun_any_disjuncts : (f : NegNormForm L) → toPropFun (.any (disjuncts
 | fls   => by simp [disjuncts, toPropFun, Array.attach, PropFun.any]
 | lit l => by simp [disjuncts, toPropFun, Array.attach, PropFun.any]
 | any as => by
-  have : ∀ a ∈ as, _ := fun a h =>
+  have : ∀ a ∈ as, _ := fun a _h =>
     toPropFun_any_disjuncts a
   ext τ
   simp [toPropFun, Array.attach]
@@ -166,11 +164,23 @@ def toPropFun_any_disjuncts : (f : NegNormForm L) → toPropFun (.any (disjuncts
     simp [disjuncts, Array.data_concatMap, Array.attach] at hb
     rcases hb with ⟨a,ha,ha',hb⟩
     specialize this _ ha'
-    refine ⟨_,⟨_,ha,ha',?_⟩,h⟩
-    sorry
-  · sorry
-  stop
-  simp [toPropFun, Array.attach] at this ⊢
+    refine ⟨_,⟨_,ha,ha',rfl⟩,?_⟩
+    rw [← this]; simp [toPropFun]
+    refine ⟨b,⟨?_,?_⟩,h⟩
+    · simp only [Array.mem_def, hb]
+    · simp [Array.attach, hb]
+  · rintro ⟨_,⟨a,ha,_,rfl⟩,h⟩
+    rw [← this _ ‹_›] at h
+    simp [toPropFun] at h
+    rcases h with ⟨b,⟨hb,hb'⟩,h⟩
+    refine ⟨_, ⟨b,?_⟩, h⟩
+    simp [Array.attach] at hb'
+    simp [disjuncts, Array.mem_def, Array.data_concatMap, Array.attach]
+    refine ⟨_, ha, hb'⟩
+| all as => by
+  have : ∀ a ∈ as, _ := fun a _h =>
+    toPropFun_all_conjuncts a
+  ext τ
   simp_rw [PropFun.ext_iff, imp_forall_iff] at this
   rw [forall_comm] at this
   specialize this τ
@@ -178,12 +188,7 @@ def toPropFun_any_disjuncts : (f : NegNormForm L) → toPropFun (.any (disjuncts
     [ toPropFun, Array.attach, @eq_comm _ (toPropFun _)
     , ← this]
   clear this
-  simp [disjuncts, Array.data_concatMap, Array.attach, Array.mem_def]
-  sorry --aesop
-| all as => by
-  have : ∀ a ∈ as, _ := fun a h =>
-    toPropFun_all_conjuncts a
-  sorry
+  aesop (add simp [toPropFun, conjuncts, disjuncts, Array.attach, Array.mem_def, Array.data_concatMap])
 end
 
 def cleanup : NegNormForm L → NegNormForm L
@@ -192,19 +197,15 @@ def cleanup : NegNormForm L → NegNormForm L
 | lit l => .lit l
 | all as =>
   let conj := conjuncts (.all as)
-  sorry
+  .all conj
 | any as =>
   let disj := disjuncts (.any as)
-  sorry
+  .any disj
 
 @[simp] theorem toPropFun_cleanup [LawfulLitVar L ν] (f : NegNormForm L)
   : toPropFun (L := L) (cleanup f) = toPropFun f := by
   apply Eq.symm -- otherwise aesop rewrites in the wrong direction
-  induction f <;>
-    -- we ♥ aesop
-    aesop (add norm 1 simp ofPropForm)
-          (add norm 1 simp toPropFun)
-          (add norm 1 simp cleanup)
+  cases f <;> simp [cleanup, toPropFun_all_conjuncts, toPropFun_any_disjuncts]
 
 
 end NegNormForm
@@ -228,17 +229,18 @@ def encodeNNF_mkDefs [LitVar L ν] [LitVar L' ν'] [LawfulLitVar L ν] [Decidabl
   | .lit l =>
       biImpl (LitVar.mkPos t) (LitVar.map emb l)
       |>.mapProp (by simp)
-  | .and a b =>
-      withTemps 2 (
+  | .all as =>
+      withTemps as.size (
         seq[
-          encodeNNF_mkDefs
-            (.inr 0) (emb.trans ⟨Sum.inl,Sum.inl_injective⟩) a
-        , encodeNNF_mkDefs
-            (.inr 1) (emb.trans ⟨Sum.inl,Sum.inl_injective⟩) b
-        , defConj (.var t) #[.temp 0, .temp 1]
+          for_all (Array.ofFn id) (fun i =>
+            encodeNNF_mkDefs
+              (.inr i) (emb.trans ⟨Sum.inl,Sum.inl_injective⟩) (as[i.val]'i.isLt)
+          )
+        , defConj (EncCNF.WithTemps.var (L := L) t) (Array.ofFn (EncCNF.WithTemps.temp (L := L) ·))
         ]
       ) |>.mapProp (by
-        ext τ; simp
+        ext τ; simp [Array.mem_def, Array.attach]
+        simp [List.mem_iff_get]
         constructor
         case a.mp =>
           aesop
@@ -247,20 +249,20 @@ def encodeNNF_mkDefs [LitVar L ν] [LitVar L' ν'] [LawfulLitVar L ν] [Decidabl
           open PropFun in
           use fun
             | .inl v => τ v
-            | .inr 0 => τ.map emb ⊨ a.toPropFun
-            | .inr 1 => τ.map emb ⊨ b.toPropFun
+            | .inr i => τ.map emb ⊨ (as[i]).toPropFun
           aesop)
-  | .or a b =>
-      withTemps 2 (
+  | .any as =>
+      withTemps as.size (
         seq[
-          encodeNNF_mkDefs
-            (.inr 0) (emb.trans ⟨Sum.inl,Sum.inl_injective⟩) a
-        , encodeNNF_mkDefs
-            (.inr 1) (emb.trans ⟨Sum.inl,Sum.inl_injective⟩) b
-        , defDisj (.var t) #[.temp 0, .temp 1]
+          for_all (Array.ofFn id) (fun i =>
+            encodeNNF_mkDefs
+              (.inr i) (emb.trans ⟨Sum.inl,Sum.inl_injective⟩) (as[i.val]'i.isLt)
+          )
+        , defDisj (EncCNF.WithTemps.var (L := L) t) (Array.ofFn (EncCNF.WithTemps.temp (L := L) ·))
         ]
       ) |>.mapProp (by
-        ext τ; simp
+        ext τ; simp [Array.mem_def, Array.attach]
+        simp [List.mem_iff_get]
         constructor
         case a.mp =>
           aesop
@@ -269,8 +271,7 @@ def encodeNNF_mkDefs [LitVar L ν] [LitVar L' ν'] [LawfulLitVar L ν] [Decidabl
           open PropFun in
           use fun
             | .inl v => τ v
-            | .inr 0 => τ.map emb ⊨ a.toPropFun
-            | .inr 1 => τ.map emb ⊨ b.toPropFun
+            | .inr i => τ.map emb ⊨ (as[i]).toPropFun
           aesop)
 
 open PropFun in
@@ -280,27 +281,33 @@ def encodeNNF [LitVar L ν] [LawfulLitVar L ν] [DecidableEq ν]
   | .tr => VEncCNF.pure () |>.mapProp (by funext; simp)
   | .fls => addClause #[] |>.mapProp (by simp [Clause.toPropFun])
   | .lit l => addClause #[l] |>.mapProp (by simp [Clause.toPropFun, PropFun.any])
-  | .and a b =>
-    seq[ encodeNNF a, encodeNNF b].mapProp (by simp)
-  | .or a b =>
-    withTemps 2 (
-      seq[ encodeNNF_mkDefs (.inr 0) ⟨Sum.inl,Sum.inl_injective⟩ a
-        ,  encodeNNF_mkDefs (.inr 1) ⟨Sum.inl,Sum.inl_injective⟩ b
-        ,  addClause #[.temp 0, .temp 1]
+  | .all fs =>
+    for_all (Array.ofFn id) (fun i => encodeNNF (fs[i.val]'i.isLt))
+    |>.mapProp (by
+      funext τ
+      simp [Array.mem_def, Array.attach]
+      simp [List.mem_iff_get, Array.getElem_eq_data_get])
+  | .any fs =>
+    withTemps fs.size (
+      seq[
+        for_all (Array.ofFn id) (fun i =>
+          encodeNNF_mkDefs (.inr i) ⟨Sum.inl, Sum.inl_injective⟩ (fs[i.val]'i.isLt)
+        )
+      , addClause (Array.ofFn (EncCNF.WithTemps.temp (L := L) ·))
       ]
     ) |>.mapProp (by
-      apply Eq.symm -- otherwise aesop rewrites in the wrong direction
-      ext τ
-      simp [Clause.toPropFun]
-      open PropFun in
+      ext τ; simp [Array.mem_def, Array.attach, Clause.satisfies_iff]
+      simp [List.mem_iff_get, Array.getElem_eq_data_get]
       constructor
       case a.mp =>
-        intro h
-        use fun | .inl v => τ v | .inr 0 => τ ⊨ a.toPropFun | .inr 1 => τ ⊨ b.toPropFun
         aesop
       case a.mpr =>
-        aesop
-      )
+        intro h
+        open PropFun in
+        use fun
+          | .inl v => τ v
+          | .inr i => τ ⊨ (fs[i]).toPropFun
+        aesop)
 
 -- nospecialize here because otherwise the compiler tries specializing it a ton
 -- and that causes big slowdowns when building up VEncCNFs
