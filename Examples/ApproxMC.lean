@@ -9,8 +9,6 @@ import LeanSAT
 
 open LeanSAT
 
-namespace Examples.ApproxMC
-
 instance : Solver IO := Solver.Impl.DimacsCommand "cadical"
 instance : Solver.ModelCount IO := Solver.Impl.ApproxMCCommand
 

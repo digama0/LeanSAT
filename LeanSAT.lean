@@ -23,6 +23,7 @@ import LeanSAT.Solver.Impl.ApproxMCCommand
 import LeanSAT.Solver.Impl.CMSGenCommand
 import LeanSAT.Solver.Impl.D4Command
 import LeanSAT.Solver.Impl.DimacsCommand
+import LeanSAT.Solver.Impl.CakeLpr
 import LeanSAT.Solver.Impl.UniGenCommand
 import LeanSAT.Solver.Basic
 import LeanSAT.Solver.Dimacs

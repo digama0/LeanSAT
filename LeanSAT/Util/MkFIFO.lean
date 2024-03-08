@@ -20,7 +20,7 @@ def getTempPath : IO System.FilePath := do
     cmd := "mktemp"
     args := #["-u"]
   }
-  return name
+  return name.trim
 
 def withTempFIFO (f : System.FilePath → IO α) : IO α := do
   let name ← getTempPath
