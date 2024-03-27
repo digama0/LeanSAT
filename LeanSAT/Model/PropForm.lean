@@ -7,8 +7,12 @@ Authors: Wojciech Nawrocki
 
 import Mathlib.Data.Set.Basic
 
+import LeanColls
+
 import LeanSAT.Upstream.ToMathlib
 import LeanSAT.Model.PropAssn
+
+open LeanColls
 
 namespace LeanSAT.Model
 
@@ -51,23 +55,11 @@ instance [ToString ν] : ToString (PropForm ν) :=
 
 instance : Coe L (PropForm L) := ⟨.var⟩
 
-def conj' (fs : List (PropForm L)) : PropForm L :=
-  match fs.foldr (init := none) (fun f =>
-    fun
-    | none => some f
-    | some f' => some <| .conj f f'
-  ) with
-  | none => .tr
-  | some f => f
+def all [Fold C (PropForm L)] (fs : C) : PropForm L :=
+  Fold.fold fs .conj .tr
 
-def disj' (fs : List (PropForm L)) : PropForm L :=
-  match fs.foldr (init := none) (fun f =>
-    fun
-    | none => some f
-    | some f' => some <| .disj f f'
-  ) with
-  | none => .fls
-  | some f => f
+def any [Fold C (PropForm L)] (fs : C) : PropForm L :=
+  Fold.fold fs .disj .fls
 
 /-- The unique extension of `τ` from variables to formulas. -/
 @[simp]
@@ -143,6 +135,37 @@ theorem satisfies_biImpl : τ ⊨ biImpl φ₁ φ₂ ↔ (τ ⊨ φ₁ ↔ τ �
 theorem satisfies_biImpl' : τ ⊨ biImpl φ₁ φ₂ ↔ ((τ ⊨ φ₁ ∧ τ ⊨ φ₂) ∨ (τ ⊭ φ₁ ∧ τ ⊭ φ₂)) := by
   simp only [sEntails, satisfies, eval]
   cases (eval τ φ₁) <;> aesop
+
+@[simp]
+theorem satisfies_all
+    [Fold C (PropForm ν)] [ToList C (PropForm ν)] [Fold.ToList C (PropForm ν)]
+    [Membership (PropForm ν) C] [Mem.ToList C (PropForm ν)]
+  : ∀ {fs : C}, τ ⊨ all fs ↔ ∀ f ∈ fs, τ ⊨ f := by
+  intro fs; unfold all
+  have ⟨L,perm,h⟩ := Fold.ToList.fold_eq_foldr_toList fs conj tr
+  -- rewrite the fold to a list foldr
+  rw [h]; clear h
+  -- rewrite the membership to ∈ L
+  conv => rhs; ext; rw [Mem.ToList.mem_iff_mem_toList, ← perm.mem_iff]
+  clear perm
+  -- now follows by induction
+  induction L <;> aesop
+
+@[simp]
+theorem satisfies_any
+    [Fold C (PropForm ν)] [ToList C (PropForm ν)] [Fold.ToList C (PropForm ν)]
+    [Membership (PropForm ν) C] [Mem.ToList C (PropForm ν)]
+  : ∀ {fs : C}, τ ⊨ any fs ↔ ∃ f ∈ fs, τ ⊨ f := by
+  intro fs; unfold any
+  have ⟨L,perm,h⟩ := Fold.ToList.fold_eq_foldr_toList fs disj fls
+  -- rewrite the fold to a list foldr
+  rw [h]; clear h
+  -- rewrite the membership to ∈ L
+  conv => rhs; arg 1; ext; rw [Mem.ToList.mem_iff_mem_toList, ← perm.mem_iff]
+  clear perm
+  -- now follows by induction
+  induction L <;> aesop
+
 
 /-! ### Semantic entailment and equivalence -/
 
